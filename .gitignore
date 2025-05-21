@@ -1,0 +1,15 @@
+# Binaries
+terraform-provider-zuora*
+
+# Terraform state / cache
+.terraform/
+*.tfstate
+*.tfstate.*
+
+# IDE / Editor
+.idea/
+*.iml
+.vscode/
+
+# OS files
+.DS_Store
