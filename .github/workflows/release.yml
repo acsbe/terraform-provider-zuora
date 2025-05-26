@@ -1,40 +1,63 @@
-# Terraform Provider release workflow.
-name: Release
-
-# This GitHub action creates a release when a tag that matches the pattern
-# "v*" (e.g. v0.1.0) is created.
 on:
   push:
-    tags:
-      - 'v*'
-
-# Releases need permissions to read and write the repository contents.
-# GitHub considers creating releases and uploading assets as writing contents.
-permissions:
-  contents: write
+    branches:
+      - main
 
 jobs:
-  goreleaser:
+  tag:
+    name: Auto-Tag Main
+    runs-on: ubuntu-latest
+    outputs:
+      next_tag: ${{ steps.get_next_tag.outputs.NEXT }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+
+      - name: Determine next tag
+        id: get_next_tag
+        run: |
+          LAST=$(git describe --tags --abbrev=0 || echo v0.0.0)
+          IFS='.' read -ra parts <<< "${LAST#v}"
+          patch=$((parts[2] + 1))
+          NEXT="v${parts[0]}.${parts[1]}.${patch}"
+          echo "Next tag will be $NEXT"
+          echo "::set-output name=NEXT::$NEXT"
+
+      - name: Create & push tag
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag ${{ steps.get_next_tag.outputs.NEXT }}
+          git push origin ${{ steps.get_next_tag.outputs.NEXT }}
+
+  release:
+    name: Release terraform-provider-zuora
+    needs: tag
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
-          # Allow goreleaser to access older tag information.
           fetch-depth: 0
-      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+          ref: ${{ needs.tag.outputs.next_tag }}
+
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
         with:
           go-version-file: 'go.mod'
           cache: true
+
       - name: Import GPG key
-        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec # v6.3.0
+        uses: crazy-max/ghaction-import-gpg@e89d40939c28e39f97cf32126055eeae86ba74ec
         id: import_gpg
         with:
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+
       - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552 # v6.3.0
+        uses: goreleaser/goreleaser-action@9c156ee8a17a598857849441385a2041ef570552
         with:
           args: release --clean
         env:
-          # GitHub sets the GITHUB_TOKEN secret automatically.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPG_FINGERPRINT: ${{ steps.import_gpg.outputs.fingerprint }}
