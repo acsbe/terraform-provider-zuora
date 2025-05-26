@@ -5,16 +5,18 @@ on:
     branches:
       - main
 
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
   release:
+    name: Release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      id-token: write
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup Go
         uses: actions/setup-go@v4
@@ -39,46 +41,7 @@ jobs:
             exit 1
           fi
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
-
-      - name: Set environment variable
-        run: echo "VERSION=${{ steps.version.outputs.version }}" >> $GITHUB_ENV
-
-      - name: Build and package provider binaries
-        run: |
-          mkdir -p dist
-          for GOOS in linux darwin windows; do
-            for GOARCH in amd64 arm64; do
-              FILENAME="terraform-provider-zuora_${VERSION}_${GOOS}_${GOARCH}"
-              BIN_NAME="terraform-provider-zuora"
-              [ "$GOOS" = "windows" ] && BIN_NAME="${BIN_NAME}.exe"
-              GOOS=$GOOS GOARCH=$GOARCH go build -o "$BIN_NAME"
-              zip -j "dist/${FILENAME}.zip" "$BIN_NAME"
-              rm "$BIN_NAME"
-            done
-          done
-
-      - name: Import GPG private key
-        run: |
-          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-
-      - name: Sign provider binaries
-        run: |
-          for file in dist/*.zip; do
-            gpg --batch --yes --default-key "$GPG_KEY_ID" --output "$file.sig" --detach-sign "$file"
-          done
-        env:
-          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
-
-      - name: Generate SHA256SUMS and sign
-        run: |
-          cd dist
-          CHECKSUM_FILE="terraform-provider-zuora_${VERSION}_SHA256SUMS"
-          sha256sum *.zip > "$CHECKSUM_FILE"
-          gpg --batch --yes --default-key "$GPG_KEY_ID" --output "${CHECKSUM_FILE}.sig" --detach-sign "$CHECKSUM_FILE"
-        env:
-          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          echo "VERSION=$NEW_VERSION" >> $GITHUB_ENV
 
       - name: Create Git tag
         run: |
@@ -87,13 +50,12 @@ jobs:
           git tag $VERSION
           git push origin $VERSION
 
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - name: Release using HashiCorp Action
+        uses: hashicorp/ghaction-terraform-provider-release@v4
         with:
-          tag_name: ${{ env.VERSION }}
-          name: Release ${{ env.VERSION }}
-          files: |
-            dist/*.zip
-            dist/*.zip.sig
-            dist/terraform-provider-zuora_${{ env.VERSION }}_SHA256SUMS
-            dist/terraform-provider-zuora_${{ env.VERSION }}_SHA256SUMS.sig
+          provider_name: zuora
+          gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
+          gpg_passphrase: ""
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          VERSION: ${{ env.VERSION }}
