@@ -7,10 +7,45 @@ on:
       - main
 
 jobs:
-  terraform-provider-zuora:
+  # 1) Auto-tag main
+  tag:
+    name: Auto-Tag Main
+    runs-on: ubuntu-latest
+    # expose the new tag so the next job can use it
+    outputs:
+      next_tag: ${{ steps.get_next_tag.outputs.NEXT }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Determine next tag
+        id: get_next_tag
+        run: |
+          # find last tag or start at v0.0.0
+          LAST=$(git describe --tags --abbrev=0 || echo v0.0.0)
+          IFS='.' read -ra parts <<< "${LAST#v}"
+          patch=$(( parts[2] + 1 ))
+          NEXT="v${parts[0]}.${parts[1]}.${patch}"
+          echo "Determined next tag: $NEXT"
+          echo "::set-output name=NEXT::$NEXT"
+
+      - name: Create & push tag
+        run: |
+          git tag ${{ steps.get_next_tag.outputs.NEXT }}
+          git push origin ${{ steps.get_next_tag.outputs.NEXT }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 2) Release that new tag
+  release:
     name: Release terraform-provider-zuora
+    needs: tag
+    runs-on: ubuntu-latest
     uses: hashicorp/ghaction-terraform-provider-release/.github/workflows/community.yml@v4
     with:
       setup-go-version-file: 'go.mod'
+      git-ref: ${{ needs.tag.outputs.next_tag }}
     secrets:
       gpg-private-key: ${{ secrets.GPG_PRIVATE_KEY }}
