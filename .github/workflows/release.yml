@@ -39,7 +39,6 @@ jobs:
             echo "Error: Last tag '$LAST_TAG' is not in semantic version format (vMAJOR.MINOR.PATCH)"
             exit 1
           fi
-          echo "New version: $NEW_VERSION"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Set environment variable
@@ -75,6 +74,19 @@ jobs:
         env:
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
 
+      - name: Generate SHASUMS file
+        run: |
+          cd dist
+          sha256sum *.zip > SHA256SUMS
+
+      - name: Sign SHASUMS file
+        run: |
+          gpg --batch --yes \
+            --default-key "$GPG_KEY_ID" \
+            --output dist/SHA256SUMS.sig --detach-sign dist/SHA256SUMS
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+
       - name: Create Git tag and push
         run: |
           git config user.name "GitHub Actions"
@@ -90,3 +102,5 @@ jobs:
           files: |
             dist/*.zip
             dist/*.zip.sig
+            dist/SHA256SUMS
+            dist/SHA256SUMS.sig
