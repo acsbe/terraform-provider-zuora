@@ -55,7 +55,7 @@ jobs:
           git push origin $VERSION
 
       - name: Release Terraform Provider using HashiCorp Action
-        uses: hashicorp/ghaction-terraform-provider-release@v1
+        uses: hashicorp/ghaction-terraform-provider-release/.github/workflows/community.yml@v4
         with:
           provider_name: zuora
           gpg_private_key: ${{ secrets.GPG_PRIVATE_KEY }}
