@@ -5,7 +5,7 @@ on:
 
 jobs:
   tag:
-    name: Auto-Tag Main
+    name: Tag Main
     runs-on: ubuntu-latest
     outputs:
       next_tag: ${{ steps.get_next_tag.outputs.NEXT }}
@@ -22,7 +22,7 @@ jobs:
           patch=$((parts[2] + 1))
           NEXT="v${parts[0]}.${parts[1]}.${patch}"
           echo "Next tag will be $NEXT"
-          echo "::set-output name=NEXT::$NEXT"
+          echo "NEXT=$NEXT" >> "$GITHUB_OUTPUT"
 
       - name: Create & push tag
         env:
