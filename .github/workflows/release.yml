@@ -24,16 +24,20 @@ jobs:
       - name: Determine next patch version
         id: version
         run: |
-          git fetch --tags
-          LAST_TAG=$(git tag --sort=version:refname | tail -n 1)
+          git fetch --tags --force
+          LAST_TAG=$(git tag --sort=-v:refname | head -n 1)
           echo "Last tag: $LAST_TAG"
-          if [ -z "$LAST_TAG" ]; then
+          if [[ -z "$LAST_TAG" ]]; then
             NEW_VERSION="v0.0.1"
-          else
-            VERSION=$(echo $LAST_TAG | sed 's/^v//')
-            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+          elif [[ "$LAST_TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+            MAJOR="${BASH_REMATCH[1]}"
+            MINOR="${BASH_REMATCH[2]}"
+            PATCH="${BASH_REMATCH[3]}"
             PATCH=$((PATCH + 1))
-            NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
+            NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          else
+            echo "Error: Last tag '$LAST_TAG' is not in semantic version format (vMAJOR.MINOR.PATCH)"
+            exit 1
           fi
           echo "New version: $NEW_VERSION"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
@@ -64,13 +68,11 @@ jobs:
       - name: Sign ZIP files
         run: |
           for file in dist/*.zip; do
-            gpg --batch --yes --pinentry-mode loopback \
-              --passphrase "$GPG_PASSPHRASE" \
+            gpg --batch --yes \
               --default-key "$GPG_KEY_ID" \
               --output "$file.sig" --detach-sign "$file"
           done
         env:
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
 
       - name: Create Git tag and push
