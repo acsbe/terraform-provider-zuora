@@ -21,31 +21,57 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Get current version
+      - name: Determine next patch version
         id: version
         run: |
-          CURRENT_VERSION=$(git tag --sort=version:refname | tail -n 1)
-          echo "Current version: $CURRENT_VERSION"
-          if [[ "$CURRENT_VERSION" == "" ]]; then
-            CURRENT_VERSION="v0.0.0"
+          git fetch --tags
+          LAST_TAG=$(git tag --sort=version:refname | tail -n 1)
+          echo "Last tag: $LAST_TAG"
+          if [ -z "$LAST_TAG" ]; then
+            NEW_VERSION="v0.0.1"
+          else
+            VERSION=$(echo $LAST_TAG | sed 's/^v//')
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+            PATCH=$((PATCH + 1))
+            NEW_VERSION="v$MAJOR.$MINOR.$PATCH"
           fi
-          NEW_VERSION=$(echo $CURRENT_VERSION | awk -F. '{print "v"$1"."$2"."$3+1}')
           echo "New version: $NEW_VERSION"
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
 
       - name: Set environment variable
         run: echo "VERSION=${{ steps.version.outputs.version }}" >> $GITHUB_ENV
 
-      - name: Build for multiple platforms
+      - name: Build, zip, and prepare provider for multiple platforms
         run: |
           mkdir -p dist
           for GOOS in linux darwin windows; do
             for GOARCH in amd64 arm64; do
-              BIN_NAME="terraform-provider-myprovider_${GOOS}_${GOARCH}"
+              FILENAME="terraform-provider-myprovider_${VERSION}_${GOOS}_${GOARCH}"
+              BIN_NAME="terraform-provider-myprovider"
               [ "$GOOS" = "windows" ] && BIN_NAME="${BIN_NAME}.exe"
-              GOOS=$GOOS GOARCH=$GOARCH go build -o dist/$BIN_NAME
+              GOOS=$GOOS GOARCH=$GOARCH go build -o "$BIN_NAME"
+              zip -j "dist/${FILENAME}.zip" "$BIN_NAME"
+              rm "$BIN_NAME"
             done
           done
+
+      - name: Import GPG private key
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --yes --import
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+
+      - name: Sign ZIP files
+        run: |
+          for file in dist/*.zip; do
+            gpg --batch --yes --pinentry-mode loopback \
+              --passphrase "$GPG_PASSPHRASE" \
+              --default-key "$GPG_KEY_ID" \
+              --output "$file.sig" --detach-sign "$file"
+          done
+        env:
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
 
       - name: Create Git tag and push
         run: |
@@ -55,8 +81,10 @@ jobs:
           git push origin $VERSION
 
       - name: Create GitHub release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v1.10.0
         with:
           tag_name: ${{ env.VERSION }}
           name: Release ${{ env.VERSION }}
-          files: dist/*
+          files: |
+            dist/*.zip
+            dist/*.zip.sig
