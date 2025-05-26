@@ -35,8 +35,8 @@ func Provider() *schema.Provider {
 		},
 
 		ResourcesMap: map[string]*schema.Resource{
-			"zuora_notifications_callout_template":        notifications.ResourceNotificationsCalloutTemplate(),
-			"zuora_notifications_notification_definition": notifications.ResourceNotificationsNotificationDefinition(),
+			"zuora_notifications_callout_template": notifications.ResourceNotificationsCalloutTemplate(),
+			"zuora_notification_callout_binding":   notifications.ResourceNotificationsCalloutBinding(),
 		},
 
 		ConfigureContextFunc: func(ctx context.Context, d *schema.ResourceData) (interface{}, diag.Diagnostics) {
