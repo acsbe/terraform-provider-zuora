@@ -26,7 +26,6 @@ jobs:
         run: |
           git fetch --tags --force
           LAST_TAG=$(git tag --sort=-v:refname | head -n 1)
-          echo "Last tag: $LAST_TAG"
           if [[ -z "$LAST_TAG" ]]; then
             NEW_VERSION="v0.0.1"
           elif [[ "$LAST_TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
@@ -36,7 +35,7 @@ jobs:
             PATCH=$((PATCH + 1))
             NEW_VERSION="v${MAJOR}.${MINOR}.${PATCH}"
           else
-            echo "Error: Last tag '$LAST_TAG' is not in semantic version format (vMAJOR.MINOR.PATCH)"
+            echo "Error: invalid tag format: $LAST_TAG"
             exit 1
           fi
           echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
@@ -44,7 +43,7 @@ jobs:
       - name: Set environment variable
         run: echo "VERSION=${{ steps.version.outputs.version }}" >> $GITHUB_ENV
 
-      - name: Build, zip, and prepare provider for multiple platforms
+      - name: Build and package provider binaries
         run: |
           mkdir -p dist
           for GOOS in linux darwin windows; do
@@ -64,37 +63,31 @@ jobs:
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
 
-      - name: Sign ZIP files
+      - name: Sign provider binaries
         run: |
           for file in dist/*.zip; do
-            gpg --batch --yes \
-              --default-key "$GPG_KEY_ID" \
-              --output "$file.sig" --detach-sign "$file"
+            gpg --batch --yes --default-key "$GPG_KEY_ID" --output "$file.sig" --detach-sign "$file"
           done
         env:
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
 
-      - name: Generate SHASUMS file
+      - name: Generate SHA256SUMS and sign
         run: |
           cd dist
-          sha256sum *.zip > SHA256SUMS
-
-      - name: Sign SHASUMS file
-        run: |
-          gpg --batch --yes \
-            --default-key "$GPG_KEY_ID" \
-            --output dist/SHA256SUMS.sig --detach-sign dist/SHA256SUMS
+          sha256sum *.zip > ../SHA256SUMS
+          cd ..
+          gpg --batch --yes --default-key "$GPG_KEY_ID" --output SHA256SUMS.sig --detach-sign SHA256SUMS
         env:
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
 
-      - name: Create Git tag and push
+      - name: Create Git tag
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
           git tag $VERSION
           git push origin $VERSION
 
-      - name: Create GitHub release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ env.VERSION }}
@@ -102,5 +95,5 @@ jobs:
           files: |
             dist/*.zip
             dist/*.zip.sig
-            dist/SHA256SUMS
-            dist/SHA256SUMS.sig
+            SHA256SUMS
+            SHA256SUMS.sig
