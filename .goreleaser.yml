@@ -1,0 +1,33 @@
+version: 2
+project_name: terraform-provider-zuora
+
+builds:
+  - id: zuora
+    main: ./main.go
+    binary: terraform-provider-zuora
+    goos:
+      - linux
+      - darwin
+      - windows
+    goarch:
+      - amd64
+
+archives:
+  - format: zip
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS"
+  algorithm: sha256
+  files:
+    - "*.zip"
+    # include the manifest too (it will be renamed with the version)
+    - "{{ .ProjectName }}_{{ .Version }}_manifest.json"
+
+signs:
+  - artifacts: checksum
+    args:
+      - --batch
+      - --yes
+      - --output
+      - "{{ .ProjectName }}_{{ .Version }}_SHA256SUMS.sig"
