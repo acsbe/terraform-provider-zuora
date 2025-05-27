@@ -36,10 +36,10 @@ provider "zuora" {
 
 ## Resources
 
-- [`zuora_notifications_callout_template`](https://registry.terraform.io/providers/acsbe/zuora/latest/docs/resources/notifications_callout_template)  
+- [`zuora_notifications_callout_template`]()  
   Create or manage callout templates using raw JSON payloads.
 
-- [`zuora_notifications_callout_binding`](https://registry.terraform.io/providers/acsbe/zuora/latest/docs/resources/notifications_callout_binding)  
+- [`zuora_notifications_callout_binding`]()  
   Attach or detach a callout template to/from a notification definition.
 
 ---
